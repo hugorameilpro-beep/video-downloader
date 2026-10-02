@@ -1,0 +1,10 @@
+[theme]
+base = "dark"
+primaryColor = "#a78bfa"
+backgroundColor = "#0b1020"
+secondaryBackgroundColor = "#151a2e"
+textColor = "#eef0ff"
+font = "sans serif"
+
+[server]
+maxMessageSize = 600
