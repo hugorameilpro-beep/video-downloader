@@ -2,6 +2,15 @@
 
 Mini-application Streamlit pour récupérer des **vidéos publiques** (YouTube, Facebook, LinkedIn, Vimeo, X…) au format **MP4 H.264 + AAC**, compatible avec PowerPoint sur Windows et Mac.
 
+## 📱 Mockup iPhone
+
+L'onglet **« Mockup iPhone »** incruste une vidéo (récupérée par URL, importée depuis votre ordinateur, ou déjà téléchargée dans le premier onglet) dans l'écran d'un iPhone à encoche :
+
+- Cadre généré avec Pillow (`iphone_mockup.py`) : finitions Argent, Or, Graphite ou Titane bleu, écran 100 % transparent.
+- Orientation portrait ou paysage (détection automatique), cadrage « remplir » (rognage) ou « ajuster » (bandes noires).
+- Export MP4 H.264 + AAC via ffmpeg, avec une couleur de fond au choix (le MP4 ne gère pas la transparence : prenez la couleur de votre diapositive).
+- Bouton d'aperçu instantané et téléchargement du cadre PNG transparent seul.
+
 ## 🚀 Déployer gratuitement sur Streamlit Community Cloud
 
 1. **Forkez ou poussez ce dépôt** sur votre compte GitHub.

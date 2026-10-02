@@ -1,6 +1,7 @@
 """VidéoClip — téléchargez des vidéos publiques en MP4 pour vos présentations PowerPoint."""
 
 import html
+import json
 import re
 import shutil
 import subprocess
@@ -10,6 +11,16 @@ from urllib.parse import urlparse
 
 import streamlit as st
 import yt_dlp
+
+from iphone_mockup import (
+    FINISHES,
+    QUALITIES,
+    FrameGeometry,
+    build_iphone_frame,
+    frame_png_bytes,
+    render_preview,
+    render_video,
+)
 
 # Taille maximale acceptée (Streamlit Community Cloud dispose d'environ 1 Go de RAM).
 MAX_FILESIZE_MB = 500
@@ -279,6 +290,117 @@ html, body, [class*="css"], .stApp, input, button, textarea {
     box-shadow: var(--glass-shadow);
 }
 
+/* ---- Onglets ---- */
+[role="tablist"] {
+    gap: .4rem;
+    padding: .35rem;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 18px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, .22);
+    margin-bottom: 1.2rem;
+}
+[role="tab"] {
+    flex: 1;
+    display: flex; justify-content: center; align-items: center;
+    height: auto !important;
+    margin: 0 !important;
+    padding: .65rem 1rem !important;
+    border: none !important;
+    border-radius: 13px !important;
+    background: transparent !important;
+    color: var(--text-muted) !important;
+    cursor: pointer;
+    transition: background .25s ease, color .25s ease, box-shadow .25s ease;
+}
+[role="tab"] p { font-size: .95rem !important; font-weight: 600 !important; color: inherit !important; }
+[role="tab"]:hover { color: var(--text) !important; background: rgba(255, 255, 255, .06) !important; }
+[role="tab"][aria-selected="true"] {
+    color: #fff !important;
+    background: linear-gradient(135deg, rgba(167, 139, 250, .45), rgba(34, 211, 238, .30)) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 4px 14px rgba(124, 58, 237, .25);
+}
+.react-aria-SelectionIndicator,
+[data-baseweb="tab-highlight"], [data-baseweb="tab-border"] { display: none !important; }
+
+/* ---- Carte du mockup ---- */
+.st-key-mockup_card {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, .12);
+    padding: 1.5rem 1.6rem 1.3rem;
+}
+.section-title { font-size: 1.15rem; font-weight: 700; color: var(--text); margin: 0 0 .15rem; }
+.section-sub { font-size: .9rem; color: var(--text-muted); margin: 0 0 .4rem; }
+
+/* ---- Sélecteurs, radios, import de fichier ---- */
+[data-testid="stWidgetLabel"] p { color: var(--text) !important; font-weight: 600; font-size: .9rem; }
+[data-baseweb="select"] > div {
+    background: rgba(255, 255, 255, .06) !important;
+    border: 1px solid rgba(255, 255, 255, .18) !important;
+    border-radius: 12px !important;
+    transition: border-color .25s ease, background .25s ease;
+}
+[data-baseweb="select"] > div:hover { border-color: rgba(167, 139, 250, .7) !important; }
+[data-baseweb="popover"] ul {
+    background: rgba(21, 26, 46, .92) !important;
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border); border-radius: 12px;
+}
+[data-testid="stRadio"] [role="radiogroup"] { gap: .5rem; flex-wrap: wrap; }
+[data-testid="stRadio"] label:has(input[type="radio"]) {
+    padding: .45rem .9rem; margin: 0;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .05);
+    border: 1px solid rgba(255, 255, 255, .14);
+    transition: background .25s ease, border-color .25s ease;
+}
+[data-testid="stRadio"] label:has(input[type="radio"]):hover { background: rgba(255, 255, 255, .09); }
+[data-testid="stRadio"] label:has(input[type="radio"]:checked) {
+    background: rgba(167, 139, 250, .18);
+    border-color: rgba(167, 139, 250, .65);
+}
+[data-testid="stFileUploaderDropzone"] {
+    background: rgba(255, 255, 255, .05) !important;
+    border: 1.5px dashed rgba(255, 255, 255, .25) !important;
+    border-radius: 16px !important;
+    transition: border-color .25s ease, background .25s ease;
+}
+[data-testid="stFileUploaderDropzone"]:hover {
+    border-color: rgba(34, 211, 238, .7) !important;
+    background: rgba(255, 255, 255, .08) !important;
+}
+[data-testid="stFileUploaderDropzone"] button {
+    border-radius: 10px !important;
+    background: rgba(255, 255, 255, .10) !important;
+    border: 1px solid rgba(255, 255, 255, .22) !important;
+    color: var(--text) !important;
+}
+[data-testid="stCaptionContainer"] { color: var(--text-muted) !important; }
+[data-testid="stImage"] img { border-radius: 18px; }
+
+/* Bouton secondaire (prévisualisation) */
+.st-key-mk_preview_btn button {
+    background: rgba(255, 255, 255, .08) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .25), inset 0 1px 0 rgba(255, 255, 255, .18) !important;
+}
+.st-key-mk_preview_btn button:hover { background: rgba(255, 255, 255, .14) !important; }
+
+.mockup-ready {
+    display: flex; align-items: center; gap: .7rem;
+    margin: 1.4rem 0 .9rem; padding: .9rem 1.1rem;
+    border-radius: 16px;
+    background: rgba(52, 211, 153, .10);
+    border: 1px solid rgba(110, 231, 183, .35);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    color: var(--text); font-size: .92rem;
+}
+.mockup-ready b { color: #6ee7b7; }
+
 .footer {
     text-align: center; margin-top: 2.6rem;
     font-size: .8rem; color: rgba(238, 240, 255, .45);
@@ -482,6 +604,84 @@ def fetch_video(url: str) -> dict:
 
 
 # --------------------------------------------------------------------------- #
+#  Mockup iPhone                                                              #
+# --------------------------------------------------------------------------- #
+BACKGROUNDS = {"Noir": "#000000", "Blanc": "#ffffff", "Gris clair": "#f2f2f7", "Personnalisée…": None}
+FIT_MODES = {"Remplir l'écran (rogner)": "fill", "Ajuster (bandes noires)": "fit"}
+ORIENTATIONS = ["Automatique", "Portrait", "Paysage"]
+
+
+@st.cache_data(show_spinner=False, max_entries=16)
+def get_iphone_frame(screen_width: int, finish: str, landscape: bool) -> tuple[bytes, FrameGeometry]:
+    frame, geometry = build_iphone_frame(screen_width, finish, landscape)
+    return frame_png_bytes(frame), geometry
+
+
+def probe_is_landscape(path: Path) -> bool:
+    """Détecte l'orientation affichée de la vidéo (en tenant compte de la rotation des smartphones)."""
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+         "stream=width,height:stream_side_data=rotation:stream_tags=rotate", "-of", "json", str(path)],
+        capture_output=True, text=True, timeout=60,
+    )
+    try:
+        stream = json.loads(result.stdout)["streams"][0]
+    except (ValueError, KeyError, IndexError):
+        raise UserFacingError("Ce fichier ne contient pas de piste vidéo lisible.") from None
+    width, height = stream.get("width", 0), stream.get("height", 0)
+    rotation = stream.get("tags", {}).get("rotate")
+    for side in stream.get("side_data_list", []):
+        rotation = side.get("rotation", rotation)
+    if rotation is not None and abs(int(float(rotation))) % 180 == 90:
+        width, height = height, width
+    return width > height
+
+
+def make_mockup(source: dict, settings: dict, preview: bool) -> dict:
+    """Incruste la vidéo dans le cadre iPhone (aperçu PNG ou MP4 final) dans un dossier temporaire."""
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        raise UserFacingError("ffmpeg n'est pas installé sur le serveur (vérifiez le fichier packages.txt).")
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="videoclip_mockup_"))
+    try:
+        src = tmp_dir / ("source" + source["ext"])
+        src.write_bytes(source["data"])
+
+        orientation = settings["orientation"]
+        landscape = probe_is_landscape(src) if orientation == "Automatique" else orientation == "Paysage"
+        frame_bytes, geometry = get_iphone_frame(QUALITIES[settings["quality"]], settings["finish"], landscape)
+        frame_path = tmp_dir / "iphone.png"
+        frame_path.write_bytes(frame_bytes)
+
+        if preview:
+            duration = probe_duration(src) or 2
+            out = render_preview(src, frame_path, geometry, settings["fit"], settings["background"],
+                                 tmp_dir / "apercu.png", at_seconds=min(1.0, duration / 2))
+        else:
+            out = render_video(src, frame_path, geometry, settings["fit"], settings["background"],
+                               tmp_dir / "iphone.mp4")
+        data = out.read_bytes()
+        return {
+            "data": data,
+            "size": len(data),
+            "landscape": landscape,
+            "frame": frame_bytes,
+            "filename": safe_filename(f"{source['title']} - iPhone", ".mp4"),
+            "width": geometry.width,
+            "height": geometry.height,
+        }
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def centered(landscape: bool):
+    """Colonne centrale étroite pour les rendus portrait, pleine largeur sinon."""
+    if landscape:
+        return st.container()
+    return st.columns([1, 1.4, 1])[1]
+
+
+# --------------------------------------------------------------------------- #
 #  Interface                                                                  #
 # --------------------------------------------------------------------------- #
 st.markdown(
@@ -490,7 +690,7 @@ st.markdown(
     <span class="badge"><span class="dot"></span>MP4 H.264 · Prêt pour PowerPoint</span>
     <h1>VidéoClip</h1>
     <p>Collez le lien d'une vidéo publique et récupérez-la en MP4,
-    prête à être glissée dans vos présentations.</p>
+    ou incrustez-la dans un iPhone pour vos présentations.</p>
     <div class="platforms">
         <span>YouTube</span><span>Facebook</span><span>LinkedIn</span>
         <span>Vimeo</span><span>X / Twitter</span><span>Instagram</span><span>+ 1 000 sites</span>
@@ -500,49 +700,53 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.form("download_form", border=False):
-    url = st.text_input(
-        "Lien de la vidéo",
-        placeholder="https://www.youtube.com/watch?v=…",
-        help="Fonctionne uniquement avec les vidéos publiques (sans connexion requise).",
-    )
-    submitted = st.form_submit_button("🎬  Récupérer la vidéo", use_container_width=True)
+tab_download, tab_mockup = st.tabs(["⬇️  Télécharger", "📱  Mockup iPhone"])
 
-if submitted:
-    st.session_state.pop("video", None)
-    url = (url or "").strip()
-    if not url:
-        st.error("⚠️ Veuillez coller l'URL d'une vidéo avant de lancer la récupération.")
-    elif not is_valid_url(url):
-        st.error("⚠️ Cette URL ne semble pas valide. Elle doit commencer par « http:// » ou « https:// ».")
-    else:
-        try:
-            with st.spinner("Récupération et conversion de la vidéo en MP4… Cela peut prendre quelques instants."):
-                st.session_state["video"] = fetch_video(url)
-        except UserFacingError as exc:
-            st.error(f"❌ {exc}")
-        except yt_dlp.utils.DownloadError as exc:
-            st.error(f"❌ {friendly_error(str(exc))}")
-        except Exception as exc:  # noqa: BLE001 — on ne veut jamais afficher de traceback brut
-            st.error(f"❌ Une erreur inattendue est survenue : {html.escape(str(exc))[:300]}")
+# ---------------------------- Onglet Télécharger ---------------------------- #
+with tab_download:
+    with st.form("download_form", border=False):
+        url = st.text_input(
+            "Lien de la vidéo",
+            placeholder="https://www.youtube.com/watch?v=…",
+            help="Fonctionne uniquement avec les vidéos publiques (sans connexion requise).",
+        )
+        submitted = st.form_submit_button("🎬  Récupérer la vidéo", width="stretch")
 
-video = st.session_state.get("video")
-if video:
-    thumb = (
-        f'<img src="{html.escape(video["thumbnail"], quote=True)}" alt="Miniature">'
-        if video.get("thumbnail") else "🎞️"
-    )
-    chips = [f"⏱ {format_duration(video['duration'])}", f"💾 {format_size(video['size'])}"]
-    if video.get("resolution"):
-        chips.append(f"📐 {video['resolution']}")
-    if video.get("platform"):
-        chips.append(f"🌐 {video['platform']}")
-    if video.get("uploader") and video.get("uploader") != video.get("platform"):
-        chips.append(f"👤 {video['uploader']}")
-    chips_html = "".join(f'<span class="chip">{html.escape(str(c))}</span>' for c in chips)
+    if submitted:
+        st.session_state.pop("video", None)
+        url = (url or "").strip()
+        if not url:
+            st.error("⚠️ Veuillez coller l'URL d'une vidéo avant de lancer la récupération.")
+        elif not is_valid_url(url):
+            st.error("⚠️ Cette URL ne semble pas valide. Elle doit commencer par « http:// » ou « https:// ».")
+        else:
+            try:
+                with st.spinner("Récupération et conversion de la vidéo en MP4… Cela peut prendre quelques instants."):
+                    st.session_state["video"] = fetch_video(url)
+            except UserFacingError as exc:
+                st.error(f"❌ {exc}")
+            except yt_dlp.utils.DownloadError as exc:
+                st.error(f"❌ {friendly_error(str(exc))}")
+            except Exception as exc:  # noqa: BLE001 — on ne veut jamais afficher de traceback brut
+                st.error(f"❌ Une erreur inattendue est survenue : {html.escape(str(exc))[:300]}")
 
-    st.markdown(
-        f"""
+    video = st.session_state.get("video")
+    if video:
+        thumb = (
+            f'<img src="{html.escape(video["thumbnail"], quote=True)}" alt="Miniature">'
+            if video.get("thumbnail") else "🎞️"
+        )
+        chips = [f"⏱ {format_duration(video['duration'])}", f"💾 {format_size(video['size'])}"]
+        if video.get("resolution"):
+            chips.append(f"📐 {video['resolution']}")
+        if video.get("platform"):
+            chips.append(f"🌐 {video['platform']}")
+        if video.get("uploader") and video.get("uploader") != video.get("platform"):
+            chips.append(f"👤 {video['uploader']}")
+        chips_html = "".join(f'<span class="chip">{html.escape(str(c))}</span>' for c in chips)
+
+        st.markdown(
+            f"""
 <div class="glass-card result-card">
     <div class="result-head">
         <div class="result-thumb">{thumb}</div>
@@ -554,22 +758,168 @@ if video:
     </div>
 </div>
 """,
-        unsafe_allow_html=True,
-    )
+            unsafe_allow_html=True,
+        )
 
-    st.write("")
-    if video["is_mp4"]:
-        st.video(video["data"], format="video/mp4")
-    else:
-        st.info("ℹ️ Le format MP4 n'était pas disponible pour cette source : le fichier d'origine est fourni.")
+        st.write("")
+        if video["is_mp4"]:
+            st.video(video["data"], format="video/mp4")
+        else:
+            st.info("ℹ️ Le format MP4 n'était pas disponible pour cette source : le fichier d'origine est fourni.")
 
-    st.download_button(
-        label="⬇️  Télécharger le fichier MP4",
-        data=video["data"],
-        file_name=video["filename"],
-        mime="video/mp4",
-        use_container_width=True,
-    )
+        st.download_button(
+            label="⬇️  Télécharger le fichier MP4",
+            data=video["data"],
+            file_name=video["filename"],
+            mime="video/mp4",
+            width="stretch",
+        )
+        st.caption("💡 Astuce : ouvrez l'onglet « Mockup iPhone » pour incruster cette vidéo dans un iPhone.")
+
+# --------------------------- Onglet Mockup iPhone --------------------------- #
+with tab_mockup:
+    SOURCE_DOWNLOADED, SOURCE_URL, SOURCE_FILE = "Vidéo récupérée", "Coller une URL", "Importer un fichier"
+    downloaded = st.session_state.get("video")
+
+    with st.container(key="mockup_card"):
+        st.markdown(
+            '<p class="section-title">📱 Incruster une vidéo dans un iPhone</p>'
+            '<p class="section-sub">La vidéo est placée dans l\'écran d\'un iPhone à encoche, '
+            "puis exportée en MP4 H.264 + AAC prêt pour PowerPoint.</p>",
+            unsafe_allow_html=True,
+        )
+
+        source_options = ([SOURCE_DOWNLOADED] if downloaded else []) + [SOURCE_URL, SOURCE_FILE]
+        source_choice = st.radio("Source de la vidéo", source_options, horizontal=True, key="mk_source")
+
+        mk_url, uploaded = "", None
+        if source_choice == SOURCE_DOWNLOADED and downloaded:
+            st.caption(f"🎞️ {downloaded['title']} · {format_size(downloaded['size'])}")
+        elif source_choice == SOURCE_URL:
+            mk_url = st.text_input("Lien de la vidéo", placeholder="https://www.linkedin.com/posts/…", key="mk_url")
+        else:
+            uploaded = st.file_uploader(
+                "Fichier vidéo",
+                type=["mp4", "mov", "m4v", "webm", "mkv"],
+                help=f"Taille maximale : {MAX_FILESIZE_MB} Mo.",
+                key="mk_file",
+            )
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            finish = st.selectbox("Finition du châssis", list(FINISHES), key="mk_finish")
+            fit_label = st.selectbox("Cadrage dans l'écran", list(FIT_MODES), key="mk_fit")
+        with col_b:
+            orientation = st.selectbox("Orientation de l'iPhone", ORIENTATIONS, key="mk_orientation",
+                                       help="« Automatique » choisit paysage pour une vidéo horizontale.")
+            quality = st.selectbox("Qualité d'export", list(QUALITIES), key="mk_quality",
+                                   help="La qualité haute est plus longue à générer.")
+
+        col_c, col_d = st.columns([2, 1])
+        with col_c:
+            bg_label = st.selectbox("Couleur de fond autour de l'iPhone", list(BACKGROUNDS), key="mk_bg")
+        with col_d:
+            background = BACKGROUNDS[bg_label]
+            if background is None:
+                background = st.color_picker("Couleur", "#1e1b4b", key="mk_bg_custom")
+        st.caption(
+            "ℹ️ Le format MP4 H.264 ne gère pas la transparence : choisissez la couleur de fond de votre "
+            "diapositive pour une intégration invisible. Le cadre PNG transparent est aussi téléchargeable."
+        )
+
+        col_prev, col_render = st.columns(2)
+        with col_prev:
+            preview_clicked = st.button("👁️  Prévisualiser", key="mk_preview_btn", width="stretch")
+        with col_render:
+            render_clicked = st.button("📱  Générer la vidéo encadrée", key="mk_render_btn", width="stretch")
+
+    if preview_clicked or render_clicked:
+        st.session_state.pop("mk_preview", None)
+        st.session_state.pop("mk_result", None)
+        settings = {
+            "finish": finish,
+            "fit": FIT_MODES[fit_label],
+            "orientation": orientation,
+            "quality": quality,
+            "background": background,
+        }
+        try:
+            source = None
+            if source_choice == SOURCE_DOWNLOADED and downloaded:
+                source = {"data": downloaded["data"], "title": downloaded["title"],
+                          "ext": Path(downloaded["filename"]).suffix or ".mp4"}
+            elif source_choice == SOURCE_URL:
+                mk_url = (mk_url or "").strip()
+                if not mk_url:
+                    raise UserFacingError("Veuillez coller l'URL d'une vidéo.")
+                if not is_valid_url(mk_url):
+                    raise UserFacingError("Cette URL ne semble pas valide. Elle doit commencer par « https:// ».")
+                cached = st.session_state.get("mk_url_cache")
+                if not cached or cached["url"] != mk_url:
+                    with st.spinner("Récupération de la vidéo…"):
+                        fetched = fetch_video(mk_url)
+                    cached = {"url": mk_url, "data": fetched["data"], "title": fetched["title"],
+                              "ext": Path(fetched["filename"]).suffix or ".mp4"}
+                    st.session_state["mk_url_cache"] = cached
+                source = cached
+            else:
+                if uploaded is None:
+                    raise UserFacingError("Veuillez importer un fichier vidéo.")
+                if uploaded.size > MAX_FILESIZE_MB * 1024 * 1024:
+                    raise UserFacingError(f"Le fichier dépasse la taille maximale autorisée ({MAX_FILESIZE_MB} Mo).")
+                source = {"data": uploaded.getvalue(), "title": Path(uploaded.name).stem,
+                          "ext": Path(uploaded.name).suffix.lower() or ".mp4"}
+
+            if preview_clicked:
+                with st.spinner("Création de l'aperçu…"):
+                    st.session_state["mk_preview"] = make_mockup(source, settings, preview=True)
+            else:
+                with st.spinner("Incrustation dans l'iPhone et encodage H.264… Comptez environ la durée de la vidéo."):
+                    st.session_state["mk_result"] = make_mockup(source, settings, preview=False)
+        except UserFacingError as exc:
+            st.error(f"❌ {exc}")
+        except yt_dlp.utils.DownloadError as exc:
+            st.error(f"❌ {friendly_error(str(exc))}")
+        except subprocess.TimeoutExpired:
+            st.error("❌ Le traitement a pris trop de temps. Essayez une vidéo plus courte ou la qualité standard.")
+        except RuntimeError as exc:
+            st.error(f"❌ ffmpeg n'a pas pu traiter cette vidéo : {html.escape(str(exc))[:300]}")
+        except Exception as exc:  # noqa: BLE001
+            st.error(f"❌ Une erreur inattendue est survenue : {html.escape(str(exc))[:300]}")
+
+    mk_preview = st.session_state.get("mk_preview")
+    if mk_preview:
+        st.markdown('<div class="mockup-ready">👁️ <span><b>Aperçu</b> — une image extraite de la vidéo. '
+                    "Cliquez sur « Générer la vidéo encadrée » pour obtenir le MP4.</span></div>",
+                    unsafe_allow_html=True)
+        with centered(mk_preview["landscape"]):
+            st.image(mk_preview["data"], width="stretch")
+
+    mk_result = st.session_state.get("mk_result")
+    if mk_result:
+        st.markdown(
+            f'<div class="mockup-ready">✅ <span><b>Vidéo encadrée prête</b> · '
+            f'{mk_result["width"]}×{mk_result["height"]} px · {format_size(mk_result["size"])}</span></div>',
+            unsafe_allow_html=True,
+        )
+        with centered(mk_result["landscape"]):
+            st.video(mk_result["data"], format="video/mp4")
+        st.download_button(
+            label="⬇️  Télécharger le MP4 dans l'iPhone",
+            data=mk_result["data"],
+            file_name=mk_result["filename"],
+            mime="video/mp4",
+            width="stretch",
+            key="mk_download",
+        )
+        st.download_button(
+            label="🖼️  Télécharger uniquement le cadre PNG transparent",
+            data=mk_result["frame"],
+            file_name="cadre-iphone.png",
+            mime="image/png",
+            width="stretch",
+            key="mk_frame_download",
+        )
 
 st.markdown(
     '<div class="footer">Respectez les droits d\'auteur : n\'utilisez que des vidéos que vous êtes '
